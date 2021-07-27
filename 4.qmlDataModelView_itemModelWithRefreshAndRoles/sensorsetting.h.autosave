@@ -1,0 +1,118 @@
+#ifndef SENSORSETTING_H
+#define SENSORSETTING_H
+
+#include <QQuickItem>
+#include <QSqlDatabase>
+#include <QStandardItemModel>
+#include <QAbstractItemModel>
+#include "connectdb.h"
+#include <QSqlRecord>
+#include <QSqlError>
+#include <QString>
+#include "launcher.h"
+#include "sensorgeomodel.h"
+#include "sqltablemodel.hpp"
+
+/**
+ * @brief SensorSetting: The SensorSetting class is middle layer in 3 layers model for comminucating wiht SensorSetting table in DB. This layer is used between Sensor Settings GUI in QML and ConnectDB Class. CRUD operatios is supperted for sensor settings.
+ * @version 1.0.0
+ */
+class SensorSetting : public QObject
+{
+    Q_OBJECT
+
+public:
+    explicit SensorSetting(QString dbPath, QObject* parent = Q_NULLPTR)
+{    
+    m_connectDB = new ConnectDB(dbPath);
+    /**
+     * The following method just 1 time in project runtime must be called
+     */
+    m_connectDB->createDB();
+    sensorSettingsModel = new SqlTableModel;
+}
+
+    ~SensorSetting()
+{
+    delete sensorSettingsModel;
+    delete m_connectDB;
+}
+
+    QList<QObject*> sensorGeoModelList;
+
+    QVariantList sensorNamesList;
+    QSqlTableModel* model();    
+
+    SqlTableModel *sensorSettingsModel;
+
+public Q_SLOTS:
+    Q_INVOKABLE QVariant availableSensorNames()
+{
+    return sensorNamesList;
+}
+    
+    QString addSensor(QString sensorName, QString comPort, float scale, int clipMin, int clipMax, int samplingCount, int psdShowCount, qreal thresholdMin, qreal thresholdMax, bool isChartLimitAutoPSD, int psdLimitMin, int psdLimitMax, bool isChartAutoFFT, int fftLimitMin, int fftLimitMax, qreal latitude, qreal longitude, bool isAlwaysRecording)
+    {
+        QString query = QString("SELECT * FROM Sensor WHERE sensorName = '%1'").arg(sensorName);
+        QSqlQueryModel model;
+        m_connectDB->execQueryModel(query, &model);
+        if(model.rowCount() > 0 && model.record(0).value("isDeleted").toInt() != 0)
+        {
+            if (deleteSensor(model.record(0).value("id").toInt(), true) == "ok")
+                return editSensor(model.record(0).value("id").toInt(), sensorName, comPort, scale, clipMin, clipMax,
+                                  samplingCount, psdShowCount, thresholdMin, thresholdMax,
+                                  isChartLimitAutoPSD, psdLimitMin, psdLimitMax,
+                                  isChartAutoFFT, fftLimitMin, fftLimitMax,
+                                  latitude, longitude, isAlwaysRecording);
+        }
+        else
+        {
+            query = QString("INSERT INTO Sensor (sensorName, comPort, scale, clipMin, clipMax, "
+                            "samplingCount, psdShowCount, thresholdMin, thresholdMax, "
+                            "isChartLimitAutoPSD, psdLimitMin, psdLimitMax, "
+                            "isChartAutoFFT, fftLimitMin, fftLimitMax, "
+                            "latitude, longitude, isAlwaysRecording, isDeleted) "
+                            "VALUES('%1','%2',%3,%4,%5,%6,%7,%8,%9,%10,%11,%12,%13,%14,%15,%16,%17,%18, 0)")
+                    .arg(sensorName).arg(comPort).arg(static_cast<qreal>(scale)).arg(clipMin).arg(clipMax)
+                    .arg(samplingCount).arg(psdShowCount).arg(thresholdMin).arg(thresholdMax)
+                    .arg(isChartLimitAutoPSD).arg(psdLimitMin).arg(psdLimitMax)
+                    .arg(isChartAutoFFT).arg(fftLimitMin).arg(fftLimitMax)
+                    .arg(latitude).arg(longitude).arg(isAlwaysRecording);
+            
+            return m_connectDB->execQuery(query);
+        }
+        return "";
+    }
+    
+    QString editSensor(int id, QString sensorName, QString comPort, float scale, int clipMin, int clipMax, int samplingCount, int psdShowCount, qreal thresholdMin, qreal thresholdMax, bool isChartLimitAutoPSD, int psdLimitMin, int psdLimitMax, bool isChartAutoFFT, int fftLimitMin, int fftLimitMax, qreal latitude, qreal longitude, bool isAlwaysRecording)
+    {
+        QString query = QString("Update Sensor SET sensorName = '%1', comPort = '%2', scale = %3, clipMin = %4, clipMax = %5, "
+                                "samplingCount = %6, psdShowCount = %7, thresholdMin = %8, thresholdMax = %9, "
+                                "isChartLimitAutoPSD = %10, psdLimitMin = %11, psdLimitMax = %12, "
+                                "isChartAutoFFT = %13, fftLimitMin = %14, fftLimitMax = %15, "
+                                "latitude = %16, longitude = %17, isAlwaysRecording = %18 Where id = %19")
+                .arg(sensorName).arg(comPort).arg(static_cast<double>(scale)).arg(clipMin).arg(clipMax)
+                .arg(samplingCount).arg(psdShowCount).arg(thresholdMin).arg(thresholdMax)
+                .arg(isChartLimitAutoPSD).arg(psdLimitMin).arg(psdLimitMax)
+                .arg(isChartAutoFFT).arg(fftLimitMin).arg(fftLimitMax)
+                .arg(latitude).arg(longitude).arg(isAlwaysRecording).arg(id);
+        
+        return m_connectDB->execQuery(query);
+    }
+
+    QString deleteSensor(int id, bool isReversed = false)
+    {
+        QString query = QString("Update Sensor SET isDeleted = 1 Where id = %1").arg(id);
+        if (isReversed)
+            query = QString("Update Sensor SET isDeleted = 0 Where id = %1").arg(id);
+    
+        return m_connectDB->execQuery(query);
+    }
+
+private:
+    QSqlTableModel* m_model;
+    ConnectDB* m_connectDB;
+
+};
+
+#endif // SENSORSETTING_H
